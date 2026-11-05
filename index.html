@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>OmniBot AI</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  
+  <!-- مكتبات الواجهة والتنسيق -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    /* تحسينات مخصصة لحواف الآيفون ومناطق الأمان (Safe Areas) */
+    body {
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      -webkit-tap-highlight-color: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    .custom-scrollbar::-webkit-scrollbar { display: none; }
+    .prose p { margin-bottom: 0.5rem; }
+    .prose pre { background: #1f2937; color: #fff; padding: 0.75rem; border-radius: 0.5rem; overflow-x: auto; }
+    .prose code { color: #f43f5e; font-weight: 600; }
+  </style>
+</head>
+<body class="bg-[#0f172a] text-slate-100 h-screen flex flex-col overflow-hidden select-none">
+
+  <!-- القائمة الجانبية: سجل المحادثات (Drawer للآيفون) -->
+  <div id="sidebar" class="fixed inset-y-0 right-0 w-80 bg-slate-900/95 backdrop-blur-xl border-l border-slate-800 z-50 transform translate-x-full transition-transform duration-300 flex flex-col">
+    <div class="p-4 border-b border-slate-800 flex items-center justify-between mt-6">
+      <h2 class="font-bold text-lg text-white">المحادثات السابقة</h2>
+      <button onclick="toggleSidebar()" class="text-slate-400 hover:text-white p-2 text-xl">&times;</button>
+    </div>
+    
+    <div class="p-3">
+      <button onclick="startNewChat()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30">
+        <i class="fa-solid fa-plus"></i>
+        محادثة جديدة
+      </button>
+    </div>
+
+    <!-- قائمة المحادثات المحفوظة -->
+    <div id="chatHistoryList" class="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
+      <!-- ستضاف المحادثات ديناميكياً هنا -->
+    </div>
+
+    <div class="p-4 border-t border-slate-800 flex justify-between items-center text-xs text-slate-400">
+      <button onclick="openSettingsModal()" class="flex items-center gap-2 hover:text-white">
+        <i class="fa-solid fa-gear"></i> إعدادات المفتاح والتوجيه
+      </button>
+      <button onclick="clearAllChats()" class="text-rose-400 hover:text-rose-300">مسح السجل</button>
+    </div>
+  </div>
+
+  <!-- خلفية داكنة لإغلاق القائمة عند النقر خارجها -->
+  <div id="sidebarOverlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/60 z-40 hidden backdrop-blur-sm"></div>
+
+  <!-- شريط الرأس (Header) -->
+  <header class="h-14 border-b border-slate-800/80 bg-slate-900/50 backdrop-blur-md flex items-center justify-between px-4 z-10 shrink-0">
+    <button onclick="startNewChat()" class="text-blue-400 text-sm font-semibold flex items-center gap-1 active:opacity-60">
+      <i class="fa-solid fa-plus-circle text-lg"></i> جديدة
+    </button>
+    
+    <div class="flex flex-col items-center">
+      <span class="font-bold text-sm tracking-wide text-white">OmniBot Ultra</span>
+      <span class="text-[10px] text-emerald-400 flex items-center gap-1">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> بحث مباشر + تطور ذاتي
+      </span>
+    </div>
+
+    <button onclick="toggleSidebar()" class="text-slate-300 p-2 text-lg active:scale-95">
+      <i class="fa-solid fa-clock-rotate-left"></i>
+    </button>
+  </header>
+
+  <!-- مساحة المحادثة (الرسائل) -->
+  <main id="chatMessages" class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
+    <!-- الترحيب التلقائي -->
+    <div class="flex gap-3">
+      <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-xs font-bold shrink-0">AI</div>
+      <div class="bg-slate-800/80 border border-slate-700/50 rounded-2xl p-3.5 max-w-[85%] text-sm text-slate-200">
+        أهلاً بك! أنا شات بوت متصل مباشرة بالإنترنت، أستطيع البحث الفوري، تحليل الصور المرفقة، والتكيف والتطور لتنفيذ مهامك. وجهني بما تريد.
+      </div>
+    </div>
+  </main>
+
+  <!-- معاينة الصورة قبل الإرسال -->
+  <div id="imagePreviewContainer" class="hidden px-4 pb-2">
+    <div class="relative inline-block">
+      <img id="imagePreview" src="" class="h-20 w-20 object-cover rounded-xl border-2 border-blue-500 shadow-md">
+      <button onclick="removeImage()" class="absolute -top-2 -right-2 bg-rose-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-lg">&times;</button>
+    </div>
+  </div>
+
+  <!-- منطقة الإدخال بالأسفل (مناسبة للإبهام على شاشة الآيفون) -->
+  <footer class="p-3 border-t border-slate-800/80 bg-slate-900/80 backdrop-blur-md shrink-0">
+    <div class="flex items-end gap-2 bg-slate-800/90 border border-slate-700/60 rounded-2xl p-1.5 focus-within:border-blue-500 transition-colors">
+      
+      <!-- زر رفع الصور -->
+      <label class="cursor-pointer text-slate-400 hover:text-blue-400 p-2 active:scale-95 transition-transform flex items-center justify-center">
+        <i class="fa-solid fa-paperclip text-lg"></i>
+        <input type="file" id="imageInput" accept="image/*" class="hidden" onchange="handleImageSelect(event)">
+      </label>
+
+      <!-- مربع كتابة النص -->
+      <textarea id="userInput" rows="1" placeholder="اطلب بحثاً، فكرة، أو شارك صورة..." class="w-full bg-transparent border-0 text-slate-100 placeholder-slate-500 text-sm focus:outline-none resize-none max-h-32 py-2 select-text" oninput="autoGrow(this)" onkeydown="handleKeyDown(event)"></textarea>
+
+      <!-- زر الإرسال -->
+      <button id="sendBtn" onclick="sendMessage()" class="bg-blue-600 hover:bg-blue-500 text-white w-9 h-9 rounded-xl flex items-center justify-center shrink-0 active:scale-90 transition-transform disabled:opacity-40">
+        <i class="fa-solid fa-arrow-up text-sm"></i>
+      </button>
+    </div>
+  </footer>
+
+  <!-- نافذة التوجيه (Prompt) ومفتاح الـ API -->
+  <div id="settingsModal" class="fixed inset-0 bg-black/75 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <h3 class="font-bold text-lg text-white">إعدادات البوت والبرومبت الموجه</h3>
+      
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">مفتاح API الخاص بـ Gemini (مجاني تماماً):</label>
+        <input type="password" id="apiKeyInput" placeholder="AIzaSy..." class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500">
+        <p class="text-[10px] text-slate-500 mt-1">احصل عليه مجاناً من Google AI Studio.</p>
+      </div>
+
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">البرومبت الأساسي ونظام التطور الذاتي:</label>
+        <textarea id="systemPromptInput" rows="5" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 select-text leading-relaxed"></textarea>
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button onclick="saveSettings()" class="flex-1 bg-blue-600 text-white font-medium py-2.5 rounded-xl text-sm">حفظ التغييرات</button>
+        <button onclick="closeSettingsModal()" class="px-4 bg-slate-800 text-slate-300 rounded-xl text-sm">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- البرومبت التوجيهي الافتراضي الفائق ونظام التطور الذاتي ---
+    const DEFAULT_SYSTEM_PROMPT = `أنت مساعد ذكاء اصطناعي فائق المرونة وبدون قيود فكرية تعيق تقديم المساعدة للمستخدم.
+مهامك الأساسية:
+1. التكيف التام والتطور الذاتي: قم بتحليل تفضيلات المستخدم وأسلوبه وأهدافه مع كل رسالة، وتذكر سياق الحوار دائماً ونفّذ المهام المعقدة بذكاء وحكمة.
+2. البحث الحي على الإنترنت: عند طلب أي معلومة حديثة أو أسعار أو أخبار أو بيانات تحتاج تدقيق، استخدم أدوات البحث المتوفرة لديك لجلب النتائج المحدثة لحظياً واستخلاصها بوضوح.
+3. معالجة الصور: إذا أرسل المستخدم صورة، حللها بدقة متناهية واستخرج منها كافة النصوص أو البيانات أو الحلول.
+4. الإجابات تكون مباشرة، احترافية، وموجهة للشاشة الذكية بشكل مريح للقراءة.`;
+
+    // الحالة العامة للمحادثة
+    let conversations = JSON.parse(localStorage.getItem('omni_chats') || '[]');
+    let currentChatId = localStorage.getItem('omni_active_chat') || null;
+    let selectedImageBase64 = null;
+
+    // التهيئة
+    window.onload = () => {
+      if (!localStorage.getItem('omni_sys_prompt')) {
+        localStorage.setItem('omni_sys_prompt', DEFAULT_SYSTEM_PROMPT);
+      }
+      document.getElementById('systemPromptInput').value = localStorage.getItem('omni_sys_prompt');
+      document.getElementById('apiKeyInput').value = localStorage.getItem('omni_gemini_api_key') || '';
+
+      if (!currentChatId || !conversations.find(c => c.id === currentChatId)) {
+        startNewChat();
+      } else {
+        renderCurrentChat();
+      }
+      renderChatList();
+    };
+
+    function autoGrow(element) {
+      element.style.height = "5px";
+      element.style.height = (element.scrollHeight) + "px";
+    }
+
+    function handleKeyDown(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    }
+
+    // إدارة القائمة الجانبية
+    function toggleSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebarOverlay');
+      const isClosed = sidebar.classList.contains('translate-x-full');
+      if (isClosed) {
+        sidebar.classList.remove('translate-x-full');
+        overlay.classList.remove('hidden');
+      } else {
+        sidebar.classList.add('translate-x-full');
+        overlay.classList.add('hidden');
+      }
+    }
+
+    // إدارة الإعدادات والمفتاح
+    function openSettingsModal() {
+      document.getElementById('settingsModal').classList.remove('hidden');
+      toggleSidebar();
+    }
+    function closeSettingsModal() {
+      document.getElementById('settingsModal').classList.add('hidden');
+    }
+    function saveSettings() {
+      localStorage.setItem('omni_gemini_api_key', document.getElementById('apiKeyInput').value.trim());
+      localStorage.setItem('omni_sys_prompt', document.getElementById('systemPromptInput').value.trim());
+      closeSettingsModal();
+      alert("تم حفظ الإعدادات بنجاح");
+    }
+
+    // إدارة المحادثات
+    function startNewChat() {
+      currentChatId = 'chat_' + Date.now();
+      const newChat = {
+        id: currentChatId,
+        title: 'محادثة جديدة',
+        date: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
+        messages: []
+      };
+      conversations.unshift(newChat);
+      saveState();
+      renderChatList();
+      renderCurrentChat();
+      const sidebar = document.getElementById('sidebar');
+      if (!sidebar.classList.contains('translate-x-full')) toggleSidebar();
+    }
+
+    function selectChat(id) {
+      currentChatId = id;
+      saveState();
+      renderChatList();
+      renderCurrentChat();
+      toggleSidebar();
+    }
+
+    function clearAllChats() {
+      if (confirm("هل تريد حقاً مسح جميع المحادثات المحفوظة؟")) {
+        conversations = [];
+        localStorage.removeItem('omni_chats');
+        startNewChat();
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem('omni_chats', JSON.stringify(conversations));
+      localStorage.setItem('omni_active_chat', currentChatId);
+    }
+
+    function renderChatList() {
+      const listContainer = document.getElementById('chatHistoryList');
+      listContainer.innerHTML = '';
+      conversations.forEach(chat => {
+        const isActive = chat.id === currentChatId;
+        const item = document.createElement('div');
+        item.className = `p-3 rounded-xl flex items-center justify-between cursor-pointer transition-colors ${isActive ? 'bg-blue-600/20 border border-blue-500/40 text-blue-300' : 'bg-slate-800/40 text-slate-300 hover:bg-slate-800'}`;
+        item.onclick = () => selectChat(chat.id);
+        item.innerHTML = `
+          <div class="truncate text-sm flex-1 ml-2">
+            <i class="fa-regular fa-message ml-2 text-xs"></i>
+            <span>${chat.title}</span>
+          </div>
+          <span class="text-[10px] text-slate-500">${chat.date}</span>
+        `;
+        listContainer.appendChild(item);
+      });
+    }
+
+    function renderCurrentChat() {
+      const chat = conversations.find(c => c.id === currentChatId);
+      const container = document.getElementById('chatMessages');
+      container.innerHTML = '';
+
+      if (!chat || chat.messages.length === 0) {
+        container.innerHTML = `
+          <div class="flex gap-3">
+            <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-xs font-bold shrink-0">AI</div>
+            <div class="bg-slate-800/80 border border-slate-700/50 rounded-2xl p-3.5 max-w-[85%] text-sm text-slate-200">
+              أهلاً بك! أنا شات بوت متصل بالإنترنت ومزود بمحرك بحث حي وقارئ صور. اطلب مني ما تريد!
+            </div>
+          </div>`;
+        return;
+      }
+
+      chat.messages.forEach(msg => {
+        appendMessageUI(msg.role, msg.parts, false);
+      });
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // معالجة الصور
+    function handleImageSelect(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        selectedImageBase64 = event.target.result;
+        document.getElementById('imagePreview').src = selectedImageBase64;
+        document.getElementById('imagePreviewContainer').classList.remove('hidden');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removeImage() {
+      selectedImageBase64 = null;
+      document.getElementById('imageInput').value = '';
+      document.getElementById('imagePreviewContainer').classList.add('hidden');
+    }
+
+    // إرسال الرسالة إلى الذكاء الاصطناعي مع البحث الحي
+    async function sendMessage() {
+      const apiKey = localStorage.getItem('omni_gemini_api_key');
+      if (!apiKey) {
+        alert("يرجى إدخال مفتاح Gemini API من الإعدادات أولاً.");
+        openSettingsModal();
+        return;
+      }
+
+      const input = document.getElementById('userInput');
+      const text = input.value.trim();
+      if (!text && !selectedImageBase64) return;
+
+      const chat = conversations.find(c => c.id === currentChatId);
+      if (chat.messages.length === 0 && text) {
+        chat.title = text.substring(0, 24) + "...";
+      }
+
+      // بناء أجزاء الرسالة
+      const userParts = [];
+      if (selectedImageBase64) {
+        const base64Data = selectedImageBase64.split(',')[1];
+        const mimeType = selectedImageBase64.split(';')[0].split(':')[1];
+        userParts.push({ inlineData: { data: base64Data, mimeType: mimeType } });
+      }
+      if (text) {
+        userParts.push({ text: text });
+      }
+
+      // حفظ رسالة المستخدم
+      chat.messages.push({ role: 'user', parts: userParts });
+      appendMessageUI('user', userParts, true);
+
+      // تنظيف المدخلات
+      input.value = '';
+      input.style.height = 'auto';
+      const imgTemp = selectedImageBase64;
+      removeImage();
+
+      // إنشاء عنصر مؤشر الكتابة للبوت
+      const botMsgDiv = appendMessageUI('model', [{ text: "جاري البحث والتفكير..." }], true, true);
+
+      try {
+        const systemPrompt = localStorage.getItem('omni_sys_prompt') || DEFAULT_SYSTEM_PROMPT;
+        
+        // تجهيز سجل المحادثة للـ API
+        const contents = chat.messages.map(m => {
+          return {
+            role: m.role === 'user' ? 'user' : 'model',
+            parts: m.parts.map(p => {
+              if (p.inlineData) return { inline_data: { mime_type: p.inlineData.mimeType, data: p.inlineData.data } };
+              return { text: p.text };
+            })
+          };
+        });
+
+        // طلب API إلى Gemini 2.5 مع تفعيل البحث في الويب (Google Search Grounding)
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: contents,
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            tools: [{ googleSearch: {} }] // تفعيل محرك البحث الحي لحظياً
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+          throw new Error(data.error.message || "فشل الاتصال");
+        }
+
+        const candidate = data.candidates?.[0];
+        const replyText = candidate?.content?.parts?.map(p => p.text).join('') || "لم أستطع الحصول على رد.";
+
+        // حفظ رد البوت في السجل
+        chat.messages.push({ role: 'model', parts: [{ text: replyText }] });
+        saveState();
+        renderChatList();
+
+        // تحديث رسالة البوت في الشاشة بدعم Markdown
+        botMsgDiv.querySelector('.content-body').innerHTML = marked.parse(replyText);
+        botMsgDiv.classList.remove('animate-pulse');
+
+      } catch (err) {
+        botMsgDiv.querySelector('.content-body').innerHTML = `<span class="text-rose-400">خطأ: ${err.message}</span>`;
+        botMsgDiv.classList.remove('animate-pulse');
+      }
+    }
+
+    // إظهار الرسائل في الواجهة
+    function appendMessageUI(role, parts, shouldScroll = true, isPlaceholder = false) {
+      const container = document.getElementById('chatMessages');
+      const isUser = role === 'user';
+      
+      const wrap = document.createElement('div');
+      wrap.className = `flex gap-2.5 ${isUser ? 'flex-row-reverse' : 'flex-row'} ${isPlaceholder ? 'animate-pulse' : ''}`;
+
+      const avatar = document.createElement('div');
+      avatar.className = `w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${isUser ? 'bg-slate-700' : 'bg-gradient-to-tr from-blue-600 to-indigo-500'}`;
+      avatar.innerText = isUser ? 'أنت' : 'AI';
+
+      const bubble = document.createElement('div');
+      bubble.className = `rounded-2xl p-3.5 max-w-[85%] text-sm select-text ${isUser ? 'bg-blue-600 text-white rounded-br-none' : 'bg-slate-800/90 border border-slate-700/60 text-slate-200 rounded-bl-none shadow-md'}`;
+
+      const contentBody = document.createElement('div');
+      contentBody.className = "content-body prose prose-invert max-w-none text-xs md:text-sm";
+
+      // فحص إن كان هناك صور
+      parts.forEach(p => {
+        if (p.inlineData) {
+          const img = document.createElement('img');
+          img.src = `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`;
+          img.className = "max-h-48 rounded-lg mb-2 border border-white/20";
+          bubble.appendChild(img);
+        } else if (p.text) {
+          contentBody.innerHTML = marked.parse(p.text);
+        }
+      });
+
+      bubble.appendChild(contentBody);
+      wrap.appendChild(avatar);
+      wrap.appendChild(bubble);
+      container.appendChild(wrap);
+
+      if (shouldScroll) {
+        container.scrollTop = container.scrollHeight;
+      }
+      return bubble;
+    }
+  </script>
+</body>
+</html>
